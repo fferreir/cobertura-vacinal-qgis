@@ -10,6 +10,8 @@ if qgis_python_path not in sys.path:
     sys.path.append(f"{qgis_python_path}/plugins")
 # -----------------------------------------------------------------
 
+# Força o Qt a rodar em modo "offscreen", evitando o erro "could not connect to display" ou de plugin XCB
+os.environ["QT_QPA_PLATFORM"] = "offscreen"
 # Desativa a criação de arquivos de metadados auxiliares (.aux.xml) do GDAL.
 # Isso impede que o driver PNG tente fazer acessos de atualização não suportados.
 os.environ["GDAL_PAM_ENABLED"] = "NO"
