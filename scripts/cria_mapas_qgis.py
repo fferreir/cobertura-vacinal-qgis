@@ -2,6 +2,18 @@ import sys
 import os
 import numpy as np
 
+# --- CONFIGURAÇÃO DOS CAMINHOS DO QGIS (Adicione estas linhas) ---
+# Caminho padrão do PyQGIS no Linux (ajuste se o seu for diferente)
+qgis_python_path = "/usr/share/qgis/python"
+if qgis_python_path not in sys.path:
+    sys.path.append(qgis_python_path)
+    sys.path.append(f"{qgis_python_path}/plugins")
+# -----------------------------------------------------------------
+
+# Desativa a criação de arquivos de metadados auxiliares (.aux.xml) do GDAL.
+# Isso impede que o driver PNG tente fazer acessos de atualização não suportados.
+os.environ["GDAL_PAM_ENABLED"] = "NO"
+
 # 1. Importações do QGIS
 from qgis.core import (
     QgsVectorLayer,
@@ -58,10 +70,10 @@ def main():
         return myRenderer
 
     # Variáveis
-    ano = 2023
+    ano = 2025
     # Verifique se este caminho está correto no ambiente onde vai rodar
-    path = "/home/fernando/Documentos/github/cobertura-vacinal-qgis/"
-    arquivo_dados = f"data/municipios_coberturas_{ano}.csv"
+    path = "/home/fernando/Downloads/Mapas/"
+    arquivo_dados = f"municipios_coberturas_{ano}.csv"
     separador = ","
     epsg = 4674  # SIRGAS 2000
     geometria = "geometry"
@@ -75,7 +87,17 @@ def main():
         print("Falha ao carregar a camada! Verifique o caminho do arquivo CSV.")
         sys.exit(1)
 
-    vacinas = [x for x in cobertura.fields().names() if x not in ["field_1", "CD_MUN", "NM_MUN", "SIGLA_UF"]]
+    # Seleciona apenas colunas que são numéricas e ignora IDs/Nomes estruturais do IBGE
+    vacinas = []
+    for field in cobertura.fields():
+        nome_coluna = field.name()
+        # Ignora se começar com os prefixos administrativos padrões ou colunas de sistema
+        if nome_coluna.startswith(('CD_', 'NM_', 'SIGLA_', 'field_', 'geometry')):
+            continue
+        # Se passar pelo filtro e for uma coluna numérica (int ou double), assume-se que é vacina
+        if field.isNumeric():
+            vacinas.append(nome_coluna)
+
 
     # Importante: No standalone, usamos uma instância nova do projeto, não a singleton da interface
     project = QgsProject.instance()
@@ -92,7 +114,7 @@ def main():
             "laranja": {"cor": "#fe941e", "etiqueta": "80.0 a 89.9", "min": 0.80, "max": 0.899999},
             "amarelo": {"cor": "#eee907", "etiqueta": "90.0 a 94.9", "min": 0.90, "max": 0.949999},
             "verde": {"cor": "#15a222", "etiqueta": "95.0 a 100.0", "min": 0.95, "max": 1},
-            "azul": {"cor": "#4e27e6", "etiqueta": "> 100.0", "min": 1.000001, "max": np.infty},
+            "azul": {"cor": "#4e27e6", "etiqueta": "> 100.0", "min": 1.000001, "max": np.inf},
             "branco": {"cor": "#ffffff", "etiqueta": "Sem informação", "min": -9999, "max": -9999},
         }
 
