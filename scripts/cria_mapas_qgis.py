@@ -2,25 +2,21 @@ import sys
 import os
 import numpy as np
 
-# --- CONFIGURAÇÃO DOS CAMINHOS DO QGIS (Adicione estas linhas) ---
-# Caminho padrão do PyQGIS no Linux (ajuste se o seu for diferente)
+# --- CONFIGURAÇÃO DOS CAMINHOS DO QGIS ---
 qgis_python_path = "/usr/share/qgis/python"
 if qgis_python_path not in sys.path:
     sys.path.append(qgis_python_path)
     sys.path.append(f"{qgis_python_path}/plugins")
 # -----------------------------------------------------------------
 
-# Força o Qt a rodar em modo "offscreen", evitando o erro "could not connect to display" ou de plugin XCB
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
-# Desativa a criação de arquivos de metadados auxiliares (.aux.xml) do GDAL.
-# Isso impede que o driver PNG tente fazer acessos de atualização não suportados.
 os.environ["GDAL_PAM_ENABLED"] = "NO"
 
 # 1. Importações do QGIS
 from qgis.core import (
     QgsVectorLayer,
     QgsPrintLayout,
-    QgsApplication, # Importante para standalone
+    QgsApplication,
     QgsLayoutItemLabel,
     QgsLayoutItemLegend,
     QgsLayoutItemMap,
@@ -34,37 +30,62 @@ from qgis.core import (
     QgsSymbol,
     QgsUnitTypes,
     QgsProject,
-    QgsLayoutItemLabel, # Label para o título
     QgsTextFormat,
 )
 from qgis.PyQt import QtGui, QtCore
 
 
 def main():
-    # 2. Configuração Inicial do QGIS (Standalone)
-    # Ajuste o caminho abaixo se seu QGIS não estiver instalado em /usr (comum em Linux)
-    # No Windows, geralmente é algo como "C:/OSGeo4W/apps/qgis"
     qgs_prefix_path = "/usr"
 
     QgsApplication.setPrefixPath(qgs_prefix_path, True)
-    qgs = QgsApplication([], False) # False = Sem interface gráfica (GUI)
+    qgs = QgsApplication([], False)
     qgs.initQgis()
-
 
     def cria_simbologia(cores_faixas, myLayer, myTargetField):
         myRangeList = []
+
+        # --- CÁLCULO DAS ETIQUETAS COM CONTAGEM (NOVO) ---
+        # 1. Obter todos os valores da vacina atual ignorando valores nulos/inválidos se necessário
+        valores = []
+        for feature in myLayer.getFeatures():
+            val = feature[myTargetField]
+            if val is not None and val != NULL: # Garante compatibilidade com tipos do QGIS
+                try:
+                    valores.append(float(val))
+                except (ValueError, TypeError):
+                    continue
+
+        total_municipios = len(valores)
+        # -------------------------------------------------
+
         for categoria in cores_faixas:
             myMin = cores_faixas[categoria]["min"]
             myMax = cores_faixas[categoria]["max"]
-            myLabel = cores_faixas[categoria]["etiqueta"]
+            myLabelOrig = cores_faixas[categoria]["etiqueta"]
+
+            # --- CONTAGEM POR FAIXA (NOVO) ---
+            if myMin == -9999 and myMax == -9999:
+                # Caso especial para "Sem informação" (valores menores que 0 ou específicos)
+                n_municipios = sum(1 for v in valores if v < 0)
+            elif myMax == np.inf:
+                n_municipios = sum(1 for v in valores if v >= myMin)
+            else:
+                n_municipios = sum(1 for v in valores if myMin <= v <= myMax)
+
+            # Nova etiqueta formatada: "Etiqueta (X/Total)"
+            myLabel = f"{myLabelOrig} ({n_municipios}/{total_municipios})"
+            # -------------------------------------------------
+
             myColour = QtGui.QColor(cores_faixas[categoria]["cor"])
             mySymbol = QgsSymbol.defaultSymbol(myLayer.geometryType())
             mySymbol.setColor(myColour)
-            myOpacity = 1
-            mySymbol.setOpacity(myOpacity)
+            mySymbol.setOpacity(1)
+
             myBorderColour = QtGui.QColor("#838383")
             mySymbol.symbolLayer(0).setStrokeWidth(0.1)
             mySymbol.symbolLayer(0).setStrokeColor(myBorderColour)
+
             myRange = QgsRendererRange(myMin, myMax, mySymbol, myLabel)
             myRangeList.append(myRange)
 
@@ -76,7 +97,6 @@ def main():
 
     # Variáveis
     ano = 2025
-    # Verifique se este caminho está correto no ambiente onde vai rodar
     path = "/home/fernando/Downloads/Mapas/"
     arquivo_dados = f"municipios_coberturas_{ano}.csv"
     separador = ","
@@ -86,25 +106,24 @@ def main():
 
     # Adiciona camada
     uri = f"file://{path+arquivo_dados}?delimiter={separador}&crs=epsg:{epsg}&wktField={geometria}"
+
+    # Importar NULL do QGIS para tratamento de dados vazios
+    from qgis.core import NULL
+
     cobertura = QgsVectorLayer(uri, layer_name, "delimitedtext")
 
     if not cobertura.isValid():
         print("Falha ao carregar a camada! Verifique o caminho do arquivo CSV.")
         sys.exit(1)
 
-    # Seleciona apenas colunas que são numéricas e ignora IDs/Nomes estruturais do IBGE
     vacinas = []
     for field in cobertura.fields():
         nome_coluna = field.name()
-        # Ignora se começar com os prefixos administrativos padrões ou colunas de sistema
         if nome_coluna.startswith(('CD_', 'NM_', 'SIGLA_', 'field_', 'geometry')):
             continue
-        # Se passar pelo filtro e for uma coluna numérica (int ou double), assume-se que é vacina
         if field.isNumeric():
             vacinas.append(nome_coluna)
 
-
-    # Importante: No standalone, usamos uma instância nova do projeto, não a singleton da interface
     project = QgsProject.instance()
     project.clear()
     project.addMapLayer(cobertura)
@@ -125,13 +144,12 @@ def main():
 
         myRenderer = cria_simbologia(cores_faixas, cobertura, vacina)
         cobertura.setRenderer(myRenderer)
-        cobertura.triggerRepaint() # Força atualização visual da camada na memória
+        cobertura.triggerRepaint()
 
         # Layout Setup
         manager = project.layoutManager()
         layoutName = "Mapa de coberturas"
 
-        # Remove layout anterior se existir (limpeza)
         layouts_list = manager.printLayouts()
         for layout in layouts_list:
             if layout.name() == layoutName:
@@ -146,55 +164,43 @@ def main():
         page = layout.pageCollection().page(0)
         page_size = QgsLayoutSize(220, 220, QgsUnitTypes.LayoutMillimeters)
         page.setPageSize(page_size)
-        # Nota: layout.renderContext() pode não estar totalmente disponível sem setup extra,
-        # mas definimos DPI na exportação.
 
         # Criar Mapa
         map_item = QgsLayoutItemMap(layout)
         map_item.attemptMove(QgsLayoutPoint(5, 5, QgsUnitTypes.LayoutMillimeters))
         map_item.attemptResize(QgsLayoutSize(210, 210, QgsUnitTypes.LayoutMillimeters))
-
-        # Não usamos iface.activeLayer(). Usamos a variável 'cobertura' direta.
-        map_item.setLayers([cobertura]) # Define explicitamente qual layer aparece no mapa
+        map_item.setLayers([cobertura])
         map_item.zoomToExtent(cobertura.extent())
         layout.addLayoutItem(map_item)
 
-        # 1. Criar Título do Gráfico (Novo)
+        # Criar Título
         title = QgsLayoutItemLabel(layout)
         title.setText(f'{vacina} - {ano}')
 
-        # Configuração da Fonte (Ajuste o tamanho e estilo como desejar)
         font = QtGui.QFont("Arial", 16)
         font.setBold(True)
-
         text_format = QgsTextFormat()
         text_format.setFont(font)
         text_format.setSize(16)
-
         title.setTextFormat(text_format)
 
-        # Centralização
-        title.setHAlign(QtCore.Qt.AlignCenter) # Alinhamento Horizontal
-        title.setVAlign(QtCore.Qt.AlignVCenter) # Alinhamento Vertical
+        title.setHAlign(QtCore.Qt.AlignCenter)
+        title.setVAlign(QtCore.Qt.AlignVCenter)
 
-        # Define a largura igual à da página para facilitar a centralização
-        # Posiciona no X=0 (início da página) e Y=5 (5mm do topo)
         largura_pagina = page.pageSize().width()
         title.attemptResize(QgsLayoutSize(largura_pagina, 20, QgsUnitTypes.LayoutMillimeters))
         title.attemptMove(QgsLayoutPoint(0, 5, QgsUnitTypes.LayoutMillimeters))
-
         layout.addLayoutItem(title)
 
         # Criar Legenda
         legend = QgsLayoutItemLegend(layout)
-        legend.setLinkedMap(map_item) # Vincula ao mapa criado
+        legend.setLinkedMap(map_item)
         layout.addLayoutItem(legend)
         legend.setFrameEnabled(False)
         legend.setFrameStrokeWidth(QgsLayoutMeasurement(0.3))
-        #legend.setTitle(f'{vacina} - {ano}')
         legend.setTitle('')
         legend.setBackgroundEnabled(False)
-        legend.setAutoUpdateModel(False) # Importante manter falso para customizações manuais se houver
+        legend.setAutoUpdateModel(False)
 
         page_height = page.pageSize().height()
         legend.setReferencePoint(QgsLayoutItem.LowerLeft)
@@ -208,9 +214,7 @@ def main():
         image_settings = exporter.ImageExportSettings()
         image_settings.dpi = 300
 
-        # Garante que a pasta de imagens existe
         os.makedirs(path + "images/", exist_ok=True)
-
         file_name = path + f"images/{ano}_{vacina.replace('/', ' ')}.png"
 
         if os.path.exists(file_name):
@@ -220,9 +224,6 @@ def main():
         if result != QgsLayoutExporter.Success:
             print(f"Erro ao exportar: {vacina}")
 
-    # --- FIM DA LÓGICA ---
-
-    # 3. Finalizar QGIS e limpar memória
     qgs.exitQgis()
     print("Processo concluído.")
 
