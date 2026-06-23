@@ -19,6 +19,7 @@ from qgis.core import (
     QgsVectorLayer,
     QgsPrintLayout,
     QgsApplication, # Importante para standalone
+    QgsLayoutItemLabel,
     QgsLayoutItemLegend,
     QgsLayoutItemMap,
     QgsLayoutExporter,
@@ -31,8 +32,10 @@ from qgis.core import (
     QgsSymbol,
     QgsUnitTypes,
     QgsProject,
+    QgsLayoutItemLabel, # Label para o título
+    QgsTextFormat,
 )
-from qgis.PyQt import QtGui
+from qgis.PyQt import QtGui, QtCore
 
 
 def main():
@@ -154,20 +157,47 @@ def main():
         map_item.zoomToExtent(cobertura.extent())
         layout.addLayoutItem(map_item)
 
+        # 1. Criar Título do Gráfico (Novo)
+        title = QgsLayoutItemLabel(layout)
+        title.setText(f'{vacina} - {ano}')
+
+        # Configuração da Fonte (Ajuste o tamanho e estilo como desejar)
+        font = QtGui.QFont("Arial", 16)
+        font.setBold(True)
+
+        text_format = QgsTextFormat()
+        text_format.setFont(font)
+        text_format.setSize(16)
+
+        title.setTextFormat(text_format)
+
+        # Centralização
+        title.setHAlign(QtCore.Qt.AlignCenter) # Alinhamento Horizontal
+        title.setVAlign(QtCore.Qt.AlignVCenter) # Alinhamento Vertical
+
+        # Define a largura igual à da página para facilitar a centralização
+        # Posiciona no X=0 (início da página) e Y=5 (5mm do topo)
+        largura_pagina = page.pageSize().width()
+        title.attemptResize(QgsLayoutSize(largura_pagina, 20, QgsUnitTypes.LayoutMillimeters))
+        title.attemptMove(QgsLayoutPoint(0, 5, QgsUnitTypes.LayoutMillimeters))
+
+        layout.addLayoutItem(title)
+
         # Criar Legenda
         legend = QgsLayoutItemLegend(layout)
         legend.setLinkedMap(map_item) # Vincula ao mapa criado
         layout.addLayoutItem(legend)
         legend.setFrameEnabled(False)
         legend.setFrameStrokeWidth(QgsLayoutMeasurement(0.3))
-        legend.setTitle(f'{vacina} - {ano}')
+        #legend.setTitle(f'{vacina} - {ano}')
+        legend.setTitle('')
         legend.setBackgroundEnabled(False)
         legend.setAutoUpdateModel(False) # Importante manter falso para customizações manuais se houver
 
         page_height = page.pageSize().height()
         legend.setReferencePoint(QgsLayoutItem.LowerLeft)
         legend.attemptMove(
-            QgsLayoutPoint(10, page_height - 10, QgsUnitTypes.LayoutMillimeters),
+            QgsLayoutPoint(10, page_height - 20, QgsUnitTypes.LayoutMillimeters),
             useReferencePoint=True,
         )
 
@@ -180,6 +210,9 @@ def main():
         os.makedirs(path + "images/", exist_ok=True)
 
         file_name = path + f"images/{ano}_{vacina.replace('/', ' ')}.png"
+
+        if os.path.exists(file_name):
+            os.remove(file_name)
         result = exporter.exportToImage(file_name, image_settings)
 
         if result != QgsLayoutExporter.Success:
