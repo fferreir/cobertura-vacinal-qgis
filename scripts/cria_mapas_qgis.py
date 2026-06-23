@@ -45,7 +45,7 @@ def main():
     def cria_simbologia(cores_faixas, myLayer, myTargetField):
         myRangeList = []
 
-        # --- CÁLCULO DAS ETIQUETAS COM CONTAGEM (NOVO) ---
+        # --- CÁLCULO DAS ETIQUETAS COM CONTAGEM ---
         # 1. Obter todos os valores da vacina atual ignorando valores nulos/inválidos se necessário
         valores = []
         for feature in myLayer.getFeatures():
@@ -64,7 +64,7 @@ def main():
             myMax = cores_faixas[categoria]["max"]
             myLabelOrig = cores_faixas[categoria]["etiqueta"]
 
-            # --- CONTAGEM POR FAIXA (NOVO) ---
+            # --- CONTAGEM POR FAIXA ---
             if myMin == -9999 and myMax == -9999:
                 # Caso especial para "Sem informação" (valores menores que 0 ou específicos)
                 n_municipios = sum(1 for v in valores if v < 0)
@@ -74,7 +74,8 @@ def main():
                 n_municipios = sum(1 for v in valores if myMin <= v <= myMax)
 
             # Nova etiqueta formatada: "Etiqueta (X/Total)"
-            myLabel = f"{myLabelOrig} ({n_municipios}/{total_municipios})"
+            myLabel = f"{myLabelOrig} ({n_municipios})"
+            #myLabel = f"{myLabelOrig} ({n_municipios}/{total_municipios})"
             # -------------------------------------------------
 
             myColour = QtGui.QColor(cores_faixas[categoria]["cor"])
@@ -189,7 +190,7 @@ def main():
 
         largura_pagina = page.pageSize().width()
         title.attemptResize(QgsLayoutSize(largura_pagina, 20, QgsUnitTypes.LayoutMillimeters))
-        title.attemptMove(QgsLayoutPoint(0, 5, QgsUnitTypes.LayoutMillimeters))
+        title.attemptMove(QgsLayoutPoint(0, 2, QgsUnitTypes.LayoutMillimeters))
         layout.addLayoutItem(title)
 
         # Criar Legenda
