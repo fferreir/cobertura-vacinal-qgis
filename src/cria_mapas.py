@@ -82,7 +82,17 @@ def gerar_mapas_qgis(caminho_csv, ano, diretorio_saida):
         project.addMapLayer(cobertura)
 
         os.makedirs(diretorio_saida, exist_ok=True)
+        codigos_operacionais = {'4300001', '4300002', '430000', 4300001, 4300002}
+        has_cd_mun = 'CD_MUN' in [f.name() for f in cobertura.fields()]
+
         total_features = cobertura.featureCount()
+        total_operacionais = 0
+        if has_cd_mun:
+            for feature in cobertura.getFeatures():
+                cd = str(feature['CD_MUN']).strip()
+                if cd in codigos_operacionais:
+                    total_operacionais += 1
+        total_municipios = total_features - total_operacionais
 
         for vacina in vacinas:
             cores_faixas = {
@@ -96,6 +106,10 @@ def gerar_mapas_qgis(caminho_csv, ano, diretorio_saida):
 
             valores = []
             for feature in cobertura.getFeatures():
+                if has_cd_mun:
+                    cd = str(feature['CD_MUN']).strip()
+                    if cd in codigos_operacionais:
+                        continue
                 val = feature[vacina]
                 if val is not None and val != NULL:
                     try:
@@ -108,7 +122,7 @@ def gerar_mapas_qgis(caminho_csv, ano, diretorio_saida):
                 myMin, myMax, myLabelOrig = cfg["min"], cfg["max"], cfg["etiqueta"]
                 if myMin == -9999 and myMax == -9999:
                     n_validos = sum(1 for v in valores if v >= 0)
-                    n_mun = total_features - n_validos
+                    n_mun = total_municipios - n_validos
                 elif myMax == np.inf:
                     n_mun = sum(1 for v in valores if v >= myMin)
                 else:
@@ -216,24 +230,29 @@ def gerar_mapas_matplotlib(caminho_csv, ano, diretorio_saida):
     os.makedirs(diretorio_saida, exist_ok=True)
     gdf.replace({-9999: None}, inplace=True)
 
+    codigos_operacionais = ['4300001', '4300002', '430000', 4300001, 4300002]
+    if 'CD_MUN' in gdf.columns:
+        gdf_municipios = gdf[~gdf['CD_MUN'].astype(str).str.strip().isin([str(c) for c in codigos_operacionais])].copy()
+    else:
+        gdf_municipios = gdf.copy()
+
     bins = [.79999, 0.89999, 0.94999, 1]
     colours = ["#e70304", "#fe941e", "#eee907", "#15a222", "#4e27e6"]
     cmap = mpl.colors.ListedColormap(colours)
 
     for imunogeno in imunogenos:
-        vals = gdf[imunogeno].dropna()
-        if len(vals) == 0:
+        vals = gdf_municipios[imunogeno].dropna()
+        if len(vals) == 0 and len(gdf[imunogeno].dropna()) == 0:
             continue
         print(f"Gerando mapa Matplotlib para: {imunogeno}")
         fig, ax = plt.subplots(figsize=(11, 11), subplot_kw=dict(aspect='equal'))
         
-        vals = gdf[imunogeno].dropna()
         c1 = (vals < 0.8).sum()
         c2 = ((vals >= 0.8) & (vals < 0.9)).sum()
         c3 = ((vals >= 0.9) & (vals < 0.95)).sum()
         c4 = ((vals >= 0.95) & (vals <= 1.0)).sum()
         c5 = (vals > 1.0).sum()
-        c_missing = gdf[imunogeno].isna().sum()
+        c_missing = gdf_municipios[imunogeno].isna().sum()
 
         labels = [
             f"< 80.0 ({c1})",
