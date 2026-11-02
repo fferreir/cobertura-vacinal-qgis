@@ -72,7 +72,7 @@ def gerar_mapas_qgis(caminho_csv, ano, diretorio_saida):
         vacinas = []
         for field in cobertura.fields():
             nome_coluna = field.name()
-            if any(nome_coluna.startswith(p) for p in ['CD_', 'NM_', 'SIGLA_', 'field_', 'geometry', 'Unnamed', 'Doses', 'População', 'Data', 'AREA_']):
+            if any(nome_coluna.startswith(p) for p in ['CD_', 'NM_', 'SIGLA_', 'field_', 'geometry', 'Unnamed', 'Doses', 'População', 'Numerador', 'Denominador', 'Data', 'AREA_', 'Região', 'Município']):
                 continue
             if field.isNumeric():
                 vacinas.append(nome_coluna)
@@ -221,10 +221,10 @@ def gerar_mapas_matplotlib(caminho_csv, ano, diretorio_saida):
     df['geometry'] = gpd.GeoSeries.from_wkt(df['geometry'])
     gdf = gpd.GeoDataFrame(df, geometry='geometry')
 
-    colunas_ignorar = ['Unnamed: 0', '', ' ', 'CD_MUN', 'NM_MUN', 'SIGLA_UF', 'geometry', 'UF Residência', 'UF']
+    colunas_ignorar = ['Unnamed: 0', '', ' ', 'CD_MUN', 'NM_MUN', 'SIGLA_UF', 'geometry', 'UF Residência', 'UF', 'Região', 'Município', 'Municipio']
     imunogenos = [
         c for c in gdf.columns
-        if str(c).strip() not in colunas_ignorar and not any(str(c).startswith(p) for p in ['Doses', 'População', 'Data', 'CD_', 'NM_', 'SIGLA_', 'AREA_'])
+        if str(c).strip() not in colunas_ignorar and not any(str(c).startswith(p) for p in ['Doses', 'População', 'Numerador', 'Denominador', 'Data', 'CD_', 'NM_', 'SIGLA_', 'AREA_'])
     ]
 
     os.makedirs(diretorio_saida, exist_ok=True)

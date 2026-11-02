@@ -30,7 +30,7 @@ def carregar_e_normalizar_excel(arquivo_excel):
     else:
         coberturas = pd.read_excel(arquivo_excel, header=linha_hdr)
         linha_vacinas = df_raw.iloc[0].tolist()
-        linha_meses = df_raw.iloc[1].tolist() if len(df_raw) > 1 else []
+        linha_meses = df_raw.iloc[1].tolist() if linha_hdr > 1 and len(df_raw) > 1 else []
         
         novas_colunas = list(coberturas.columns)
         vacina_atual = None
@@ -44,7 +44,7 @@ def carregar_e_normalizar_excel(arquivo_excel):
                 mes_str = ""
                 if c_idx < len(linha_meses) and pd.notnull(linha_meses[c_idx]):
                     val_mes = str(linha_meses[c_idx]).split(' ')[0].strip()
-                    if val_mes not in ['nan', 'None', '', 'Mês/Ano']:
+                    if val_mes not in ['nan', 'None', '', 'Mês/Ano', 'Cobertura']:
                         mes_str = f" ({val_mes})"
                 novas_colunas[c_idx] = f"{vacina_atual or 'Cobertura'}{mes_str}"
                 
@@ -107,10 +107,15 @@ def ajusta_base(ano, diretorio_dados):
     
     # Filtrar estritamente apenas colunas que representam cobertura vacinal
     colunas_descarte = [
-        'index', '', ' ', 'Data Extração', 'Região Ocorrência', 'Macrorregião Saúde',
-        'Região de Saúde', 'Município Residência', 'Cod Mun Residência', 'Imunobiológico',
-        'UF Residência', 'UF'
+        'index', '', ' ', 'Data Extração', 'Região Ocorrência', 'Região', 'Macrorregião Saúde',
+        'Região de Saúde', 'Município Residência', 'Município', 'Municipio', 'Cod Mun Residência',
+        'Imunobiológico', 'UF Residência', 'UF'
     ]
+    
+    prefixos_descarte = (
+        'Doses Aplicadas', 'Doses', 'População', 'Numerador', 'Denominador',
+        'Unnamed', 'CD_', 'NM_', 'SIGLA_'
+    )
     
     colunas_vacinas = []
     for c in coberturas.columns:
@@ -119,7 +124,7 @@ def ajusta_base(ano, diretorio_dados):
         c_str = str(c).strip()
         if not c_str or c_str in colunas_descarte:
             continue
-        if any(c_str.startswith(prefix) for prefix in ['Doses Aplicadas', 'População', 'Unnamed', 'CD_', 'NM_', 'SIGLA_']):
+        if any(c_str.startswith(prefix) for prefix in prefixos_descarte):
             continue
         colunas_vacinas.append(c)
         
@@ -148,6 +153,7 @@ def ajusta_base(ano, diretorio_dados):
         municipios_cobertura[vacina] = pd.to_numeric(municipios_cobertura[vacina], errors='coerce')
         
     # Converter a coluna de geometria em WKT string para escrita e leitura perfeita em CSV
+    municipios_cobertura = pd.DataFrame(municipios_cobertura)
     if 'geometry' in municipios_cobertura.columns:
         municipios_cobertura['geometry'] = municipios_cobertura['geometry'].apply(lambda g: g.wkt if g is not None and hasattr(g, 'wkt') else str(g) if g is not None else "")
 

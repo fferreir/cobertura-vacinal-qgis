@@ -86,9 +86,9 @@ def baixar_cobertura_vacinal(ano_desejado, diretorio_download):
         except Exception as e_aba:
             print(f"[!] Aviso ao tentar selecionar a aba 'Dados': {e_aba}")
         
-        # 4. Acionar a exportação da tabela principal (ID: exportar-dados-QV1-10) ao lado de Baixar Dados (Numerador)
-        print("Acionando a extração dos dados da tabela principal (exportar-dados-QV1-10)...")
-        xpath_botao = "//*[@id='exportar-dados-QV1-10']"
+        # 4. Acionar a exportação da tabela principal (ID: exportar-dados-tabelaCompleta)
+        print("Acionando a extração dos dados da tabela principal (exportar-dados-tabelaCompleta)...")
+        xpath_botao = "//*[@id='exportar-dados-tabelaCompleta']"
         
         botao_baixar = None
         try:
@@ -107,7 +107,7 @@ def baixar_cobertura_vacinal(ano_desejado, diretorio_download):
                     driver.switch_to.default_content()
 
         if not botao_baixar:
-            raise Exception("Não foi possível localizar o botão de download com o ID 'exportar-dados-QV1-10'.")
+            raise Exception("Não foi possível localizar o botão de download com o ID 'exportar-dados-tabelaCompleta'.")
 
         # Tenta rolar até o elemento e clicar de múltiplas formas
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", botao_baixar)
